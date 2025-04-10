@@ -44,15 +44,27 @@ export const signUpAction = async (formData: FormData) => {
 
   if (user) {
     try {
-      const { error: updateError } = await supabase.from("users").insert({
-        id: user.id,
-        name: fullName,
-        full_name: fullName,
-        email: email,
-        user_id: user.id,
-        token_identifier: user.id,
-        created_at: new Date().toISOString(),
-      });
+      // Check if user already exists in the users table
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+
+      // Only insert if user doesn't exist
+      let updateError = null;
+      if (!existingUser) {
+        const { error } = await supabase.from("users").insert({
+          id: user.id,
+          name: fullName,
+          full_name: fullName,
+          email: email,
+          user_id: user.id,
+          token_identifier: user.id,
+          created_at: new Date().toISOString(),
+        });
+        updateError = error;
+      }
 
       if (updateError) {
         console.error("Error updating user profile:", updateError);
@@ -63,9 +75,17 @@ export const signUpAction = async (formData: FormData) => {
       const trialEndDate = new Date();
       trialEndDate.setDate(trialEndDate.getDate() + 14); // 2 weeks trial
 
-      const { error: subscriptionError } = await supabase
+      // Check if subscription already exists for this user
+      const { data: existingSubscription } = await supabase
         .from("subscriptions")
-        .insert({
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      // Only insert if subscription doesn't exist
+      let subscriptionError = null;
+      if (!existingSubscription) {
+        const { error } = await supabase.from("subscriptions").insert({
           user_id: user.id,
           subscription_type: "free",
           start_date: new Date().toISOString(),
@@ -74,6 +94,8 @@ export const signUpAction = async (formData: FormData) => {
           reports_used: 0,
           is_active: true,
         });
+        subscriptionError = error;
+      }
 
       if (subscriptionError) {
         console.error("Error creating subscription:", subscriptionError);

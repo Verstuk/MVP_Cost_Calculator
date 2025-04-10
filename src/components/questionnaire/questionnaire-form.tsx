@@ -337,6 +337,44 @@ export default function QuestionnaireForm({ userId }: { userId: string }) {
     setIsSubmitting(true);
 
     try {
+      // Check subscription status first
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+
+      if (subscriptionError) {
+        console.error("Error fetching subscription:", subscriptionError);
+        throw new Error("Failed to verify subscription status");
+      }
+
+      // Check if subscription is active and not expired
+      const now = new Date();
+      const endDate = subscription ? new Date(subscription.end_date) : null;
+
+      if (
+        !subscription ||
+        !subscription.is_active ||
+        now > endDate ||
+        subscription.reports_used >= subscription.reports_limit
+      ) {
+        let errorMessage =
+          "Your subscription doesn't allow creating more reports.";
+
+        if (!subscription || !subscription.is_active || now > endDate) {
+          errorMessage =
+            "Your subscription has expired. Please upgrade to continue.";
+        } else if (subscription.reports_used >= subscription.reports_limit) {
+          errorMessage = `You've reached your limit of ${subscription.reports_limit} reports. Please upgrade your subscription.`;
+        }
+
+        setErrors({
+          submit: errorMessage,
+        });
+        return;
+      }
+
       // Calculate the cost estimate
       const estimatedCost = calculateCost();
 
@@ -363,6 +401,17 @@ export default function QuestionnaireForm({ userId }: { userId: string }) {
       if (error) {
         console.error("Error saving report:", error);
         throw new Error("Failed to save report");
+      }
+
+      // Update the reports_used count in the subscription
+      const { error: updateError } = await supabase
+        .from("subscriptions")
+        .update({ reports_used: subscription.reports_used + 1 })
+        .eq("user_id", userId);
+
+      if (updateError) {
+        console.error("Error updating subscription usage:", updateError);
+        // Continue anyway since the report was saved
       }
 
       // Redirect to the report page
