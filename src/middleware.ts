@@ -5,6 +5,31 @@ import type { NextRequest } from "next/server";
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
+  // Handle language detection and setting
+  const i18nextCookie = req.cookies.get("i18next");
+  if (!i18nextCookie) {
+    // If no language cookie exists, try to detect from Accept-Language header
+    const acceptLanguage = req.headers.get("Accept-Language") || "";
+    let detectedLang = "en"; // Default to English
+
+    // Simple language detection from Accept-Language header
+    if (acceptLanguage.startsWith("ru")) {
+      detectedLang = "ru";
+    }
+
+    // Set the detected language as a cookie
+    res.cookies.set("i18next", detectedLang, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    });
+  } else {
+    // Ensure the language cookie is properly set in the response
+    res.cookies.set("i18next", i18nextCookie.value, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    });
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

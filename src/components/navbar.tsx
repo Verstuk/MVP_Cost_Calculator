@@ -3,6 +3,7 @@ import { createClient } from "../../supabase/server";
 import { Button } from "./ui/button";
 import { User, UserCircle } from "lucide-react";
 import UserProfile from "./user-profile";
+import LanguageSwitcher from "./language-switcher";
 
 export default async function Navbar() {
   const supabase = createClient();
@@ -18,6 +19,7 @@ export default async function Navbar() {
           UMA
         </Link>
         <div className="flex gap-4 items-center">
+          <LanguageSwitcher />
           {user ? (
             <>
               <Link

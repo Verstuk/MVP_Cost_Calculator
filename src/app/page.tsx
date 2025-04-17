@@ -10,16 +10,58 @@ import {
   Code,
   CreditCard,
   FileText,
+  InfoIcon,
   Shield,
+  UserCircle,
   Users,
 } from "lucide-react";
 import { createClient } from "../../supabase/server";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default async function Home() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Fetch user's subscription if logged in
+  let subscription = null;
+  let isExpired = true;
+  let daysLeft = 0;
+  let isPaidSubscription = false;
+  let hasInfiniteReports = false;
+  let reportsLeft = 0;
+
+  if (user) {
+    // Fetch user's subscription
+    const { data: userSubscription } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    subscription = userSubscription;
+
+    // Calculate subscription status
+    const now = new Date();
+    const endDate = subscription ? new Date(subscription.end_date) : null;
+    isExpired = subscription ? now > endDate : true;
+    daysLeft =
+      subscription && !isExpired
+        ? Math.ceil(
+            (endDate!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+          )
+        : 0;
+    isPaidSubscription =
+      subscription && subscription.subscription_type !== "free";
+    hasInfiniteReports = isPaidSubscription;
+    reportsLeft = subscription
+      ? hasInfiniteReports
+        ? Infinity
+        : subscription.reports_limit - subscription.reports_used
+      : 0;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
@@ -157,6 +199,101 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* Subscription Status Section (if logged in) */}
+      {user && (
+        <section className="py-16 bg-white">
+          <div className="container mx-auto px-4">
+            {/* User Profile Section */}
+            <div className="bg-card rounded-xl p-6 border shadow-sm max-w-4xl mx-auto">
+              <div className="flex items-center gap-4 mb-6">
+                <UserCircle size={48} className="text-primary" />
+                <div>
+                  <h2 className="font-semibold text-xl">User Profile</h2>
+                  <p className="text-sm text-muted-foreground">{user.email}</p>
+                </div>
+              </div>
+
+              {/* Subscription Info */}
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-medium mb-3">Subscription Status</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-secondary/30 p-4 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">
+                      Current Plan
+                    </div>
+                    <div className="font-semibold capitalize flex items-center">
+                      {subscription?.subscription_type || "No active plan"}
+                      {subscription?.subscription_type === "free" && (
+                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                          Trial
+                        </span>
+                      )}
+                    </div>
+                    {subscription && (
+                      <div className="text-sm mt-1">
+                        {isExpired ? (
+                          <span className="text-red-500">Expired</span>
+                        ) : (
+                          <span>{daysLeft} days left</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-secondary/30 p-4 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">
+                      Reports
+                    </div>
+                    <div className="font-semibold">
+                      {subscription ? (
+                        <>
+                          {subscription.reports_used}
+                          {!hasInfiniteReports && (
+                            <> / {subscription.reports_limit} used</>
+                          )}
+                          {!hasInfiniteReports && reportsLeft <= 0 && (
+                            <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
+                              Limit reached
+                            </span>
+                          )}
+                          {hasInfiniteReports && (
+                            <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                              Unlimited
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "No reports available"
+                      )}
+                    </div>
+                    {subscription && !hasInfiniteReports && reportsLeft > 0 && (
+                      <div className="text-sm mt-1">
+                        {reportsLeft} reports remaining
+                      </div>
+                    )}
+                    {subscription && hasInfiniteReports && (
+                      <div className="text-sm mt-1">
+                        Unlimited reports with your premium plan
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <Link href="/subscribe">
+                    <Button variant="outline" size="sm">
+                      {subscription?.subscription_type === "free" || isExpired
+                        ? "Upgrade Plan"
+                        : "Manage Subscription"}
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA Section */}
       <section className="py-20 bg-white">

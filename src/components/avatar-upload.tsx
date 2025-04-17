@@ -1,17 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "../../supabase/client";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Label } from "./ui/label";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
+import ReactCrop, {
+  Crop,
+  PixelCrop,
+  centerCrop,
+  makeAspectCrop,
+} from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 interface AvatarUploadProps {
   userId: string;
   initialAvatarUrl?: string;
   userInitials: string;
+}
+
+function centerAspectCrop(
+  mediaWidth: number,
+  mediaHeight: number,
+  aspect: number,
+) {
+  return centerCrop(
+    makeAspectCrop(
+      {
+        unit: "%",
+        width: 90,
+      },
+      aspect,
+      mediaWidth,
+      mediaHeight,
+    ),
+    mediaWidth,
+    mediaHeight,
+  );
 }
 
 export default function AvatarUpload({
@@ -28,45 +62,120 @@ export default function AvatarUpload({
   const supabase = createClient();
   const router = useRouter();
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  // Image cropping states
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [imgSrc, setImgSrc] = useState("");
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    setSuccess(false);
+
+    if (!e.target.files || e.target.files.length === 0) {
+      setError("You must select an image to upload.");
+      return;
+    }
+
+    const file = e.target.files[0];
+    setSelectedFile(file);
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError("File size must be less than 5MB");
+      return;
+    }
+
+    // Accept any image type
+    if (!file.type.startsWith("image/")) {
+      setError("File must be an image");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setImgSrc(reader.result?.toString() || "");
+      setCropDialogOpen(true);
+    });
+    reader.readAsDataURL(file);
+  };
+
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    setCrop(centerAspectCrop(width, height, 1));
+  };
+
+  const getCroppedImg = (
+    image: HTMLImageElement,
+    crop: PixelCrop,
+  ): Promise<Blob> => {
+    const canvas = document.createElement("canvas");
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("No 2d context");
+    }
+
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height,
+    );
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Canvas is empty"));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        0.95,
+      );
+    });
+  };
+
+  const uploadCroppedImage = async () => {
     try {
-      setError(null);
-      setSuccess(false);
+      if (!imgRef.current || !completedCrop || !selectedFile) {
+        return;
+      }
+
       setUploading(true);
+      setCropDialogOpen(false);
 
-      if (!event.target.files || event.target.files.length === 0) {
-        setError("You must select an image to upload.");
-        return;
-      }
+      const croppedImageBlob = await getCroppedImg(
+        imgRef.current,
+        completedCrop,
+      );
 
-      const file = event.target.files[0];
-      const fileExt = file.name.split(".").pop();
+      // Create a new file from the blob
+      const fileExt = "jpeg"; // We're converting to JPEG in the getCroppedImg function
+      const fileName = `avatar-${Date.now()}.${fileExt}`;
+      const croppedFile = new File([croppedImageBlob], fileName, {
+        type: "image/jpeg",
+      });
+
       const filePath = `${userId}/avatar.${fileExt}`;
-
-      // Check file size (max 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        setError("File size must be less than 2MB");
-        setUploading(false);
-        return;
-      }
-
-      // Check file type
-      if (
-        !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(
-          file.type,
-        )
-      ) {
-        setError("File must be an image (JPEG, PNG, GIF, or WEBP)");
-        setUploading(false);
-        return;
-      }
 
       // Upload file to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, croppedFile, { upsert: true });
 
       if (uploadError) {
         throw uploadError;
@@ -122,7 +231,7 @@ export default function AvatarUpload({
           id="avatar"
           type="file"
           accept="image/*"
-          onChange={handleFileChange}
+          onChange={onSelectFile}
           disabled={uploading}
           className="hidden"
         />
@@ -132,6 +241,50 @@ export default function AvatarUpload({
       {success && (
         <p className="text-sm text-green-500">Avatar updated successfully!</p>
       )}
+
+      <Dialog open={cropDialogOpen} onOpenChange={setCropDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crop Avatar</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col items-center">
+            {imgSrc && (
+              <ReactCrop
+                crop={crop}
+                onChange={(c) => setCrop(c)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={1}
+                circularCrop
+              >
+                <img
+                  ref={imgRef}
+                  src={imgSrc}
+                  alt="Crop me"
+                  onLoad={onImageLoad}
+                  className="max-h-[400px] max-w-full"
+                />
+              </ReactCrop>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCropDialogOpen(false)}
+              disabled={uploading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={uploadCroppedImage}
+              disabled={!completedCrop || uploading}
+            >
+              {uploading ? "Uploading..." : "Save Avatar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

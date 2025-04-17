@@ -1,0 +1,12 @@
+{
+  "welcome": "Welcome to MVP Cost Estimation",
+  "description": "Accurate MVP cost estimation in minutes",
+  "getStarted": "Get Started",
+  "login": "Log In",
+  "signup": "Sign Up",
+  "dashboard": "Dashboard",
+  "newEstimate": "New Estimate",
+  "reports": "Reports",
+  "settings": "Settings",
+  "logout": "Log Out"
+}

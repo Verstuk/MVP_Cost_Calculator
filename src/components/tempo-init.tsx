@@ -1,7 +1,7 @@
 "use client";
-
-import { TempoDevtools } from "tempo-devtools";
+// Import the dev tools and initialize them
 import { useEffect } from "react";
+import { TempoDevtools } from "tempo-devtools";
 
 export function TempoInit() {
   useEffect(() => {

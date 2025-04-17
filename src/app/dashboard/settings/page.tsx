@@ -17,6 +17,7 @@ import AvatarUpload from "@/components/avatar-upload";
 import DashboardNavbar from "@/components/dashboard-navbar";
 import PasswordChangeForm from "@/components/password-change-form";
 import EmailChangeForm from "@/components/email-change-form";
+import CostConfigurationForm from "@/components/cost-configuration-form";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -56,11 +57,12 @@ export default async function SettingsPage() {
         <h1 className="text-3xl font-bold mb-6">Account Settings</h1>
 
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="avatar">Avatar</TabsTrigger>
             <TabsTrigger value="password">Password</TabsTrigger>
             <TabsTrigger value="email">Email</TabsTrigger>
+            <TabsTrigger value="cost-config">Cost Configuration</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile" className="mt-6">
@@ -123,6 +125,28 @@ export default async function SettingsPage() {
                 <div className="max-w-md mx-auto">
                   {/* @ts-expect-error Server Component */}
                   <EmailChangeForm />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cost-config" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Cost Configuration</CardTitle>
+                <CardDescription>
+                  Configure labor costs and team salaries for more accurate cost
+                  estimations.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-w-md mx-auto">
+                  <CostConfigurationForm
+                    initialDeveloperRate={8000}
+                    initialDesignerRate={7000}
+                    initialProjectManagerRate={9000}
+                    initialQaTesterRate={6000}
+                  />
                 </div>
               </CardContent>
             </Card>

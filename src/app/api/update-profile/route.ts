@@ -5,6 +5,19 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const name = formData.get("name") as string | null;
   const avatarUrl = formData.get("avatarUrl") as string | null;
+  const costConfigStr = formData.get("costConfig") as string | null;
+  let costConfig = null;
+
+  if (costConfigStr) {
+    try {
+      costConfig = JSON.parse(costConfigStr);
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Invalid cost configuration format" },
+        { status: 400 },
+      );
+    }
+  }
 
   const supabase = await createClient();
 
@@ -24,6 +37,7 @@ export async function POST(request: NextRequest) {
     full_name?: string;
     name?: string;
     avatar_url?: string;
+    cost_configuration?: any;
   } = {};
 
   // Add name to update objects if provided
@@ -39,18 +53,25 @@ export async function POST(request: NextRequest) {
     profileUpdateData.avatar_url = avatarUrl;
   }
 
-  // Only proceed with updates if there's something to update
-  if (Object.keys(authUpdateData.data!).length > 0) {
-    // Update the user's metadata in auth.users
-    const { error: authUpdateError } =
-      await supabase.auth.updateUser(authUpdateData);
+  // Add cost configuration if provided
+  if (costConfig) {
+    profileUpdateData.cost_configuration = costConfig;
+  }
 
-    if (authUpdateError) {
-      console.error("Error updating auth user:", authUpdateError);
-      return NextResponse.json(
-        { error: authUpdateError.message },
-        { status: 500 },
-      );
+  // Only proceed with updates if there's something to update
+  if (Object.keys(profileUpdateData).length > 0) {
+    // Update auth user only if name or avatar changed
+    if (Object.keys(authUpdateData.data!).length > 0) {
+      const { error: authUpdateError } =
+        await supabase.auth.updateUser(authUpdateData);
+
+      if (authUpdateError) {
+        console.error("Error updating auth user:", authUpdateError);
+        return NextResponse.json(
+          { error: authUpdateError.message },
+          { status: 500 },
+        );
+      }
     }
 
     // Update the user's profile in the users table

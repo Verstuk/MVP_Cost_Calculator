@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import ProjectBasics from "./steps/project-basics";
@@ -81,6 +81,34 @@ export default function QuestionnaireForm({ userId }: { userId: string }) {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [costConfig, setCostConfig] = useState({
+    developerRate: 8000,
+    designerRate: 7000,
+    projectManagerRate: 9000,
+    qaTesterRate: 6000,
+  });
+
+  // Fetch user's cost configuration on component mount
+  useEffect(() => {
+    const fetchCostConfig = async () => {
+      try {
+        // Skip migration attempt since we can't use exec_sql
+
+        const response = await fetch("/api/cost-configuration");
+        if (response.ok) {
+          const { data } = await response.json();
+          if (data) {
+            setCostConfig(data);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching cost configuration:", error);
+        // Continue with default values if fetch fails
+      }
+    };
+
+    fetchCostConfig();
+  }, []);
 
   const steps: QuestionnaireStep[] = [
     {
@@ -234,11 +262,9 @@ export default function QuestionnaireForm({ userId }: { userId: string }) {
   };
 
   const calculateCost = () => {
-    // Base rates (per month)
-    const developerRate = 8000;
-    const designerRate = 7000;
-    const projectManagerRate = 9000;
-    const qaTesterRate = 6000;
+    // Use the fetched cost configuration values
+    const { developerRate, designerRate, projectManagerRate, qaTesterRate } =
+      costConfig;
 
     // Technology complexity multipliers
     const techComplexity = {
